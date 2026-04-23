@@ -42,7 +42,7 @@ export function useLiveAPI(systemInstruction: string) {
           responseModalities: [Modality.AUDIO],
           systemInstruction,
           speechConfig: {
-            voiceConfig: { prebuiltVoiceConfig: { voiceName: "Zephyr" } },
+            voiceConfig: { prebuiltVoiceConfig: { voiceName: "Aoede" } },
           },
         },
         callbacks: {

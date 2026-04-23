@@ -16,59 +16,12 @@ interface VoiceAgentProps {
 
 export const VoiceAgent: React.FC<VoiceAgentProps> = ({ systemInstruction, onEndDemo }) => {
   const { connect, disconnect, isConnected, volume } = useLiveAPI(systemInstruction);
-  const [timeLeft, setTimeLeft] = useState(5 * 60);
-
-  useEffect(() => {
-    const timer = setInterval(() => {
-      setTimeLeft((prev) => {
-        if (prev <= 1) {
-          clearInterval(timer);
-          onEndDemo();
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-
-    return () => {
-      clearInterval(timer);
-      disconnect();
-    };
-  }, [disconnect, onEndDemo]);
-
-  const formatTime = (seconds: number) => {
-    const m = Math.floor(seconds / 60);
-    const s = seconds % 60;
-    return `${m}:${s.toString().padStart(2, '0')}`;
-  };
 
   const pulseScale = Math.max(1, 1 + (volume * 10));
 
   return (
-    <div className="fixed bottom-6 right-6 z-50 flex items-end gap-4 pointer-events-none">
+    <div className="fixed bottom-6 right-6 z-50 flex flex-col items-end gap-4 pointer-events-none">
       
-      {/* Timer & Controls */}
-      <div className="bg-white/10 backdrop-blur-md border border-white/20 p-3 rounded-2xl shadow-2xl flex flex-col items-center gap-2 pointer-events-auto">
-        <div className="text-white text-xs font-mono font-medium tracking-wider">
-          DEMO MODE
-        </div>
-        <div className="text-white/80 text-sm font-mono font-bold">
-          {formatTime(timeLeft)}
-        </div>
-        <button 
-          onClick={() => {
-            disconnect();
-            onEndDemo();
-          }}
-          className="mt-1 bg-red-500/20 hover:bg-red-500/40 text-red-100 p-2 rounded-full transition-colors flex items-center justify-center group relative cursor-pointer"
-        >
-           <X className="w-4 h-4" />
-           <span className="absolute -top-8 bg-black/80 text-white text-[10px] px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">
-             End Demo
-           </span>
-        </button>
-      </div>
-
       {/* The Agent Avatar / Waveform */}
       <div className="relative pointer-events-auto flex flex-col items-center gap-3">
         <div className="relative flex items-center justify-center w-24 h-24">
@@ -84,22 +37,35 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({ systemInstruction, onEnd
                   transition={{ type: 'spring', damping: 10, stiffness: 300 }}
                   className="absolute inset-2 bg-blue-400/40 rounded-full blur-md"
                 />
-                <div className="relative z-10 w-16 h-16 bg-gradient-to-tr from-blue-600 to-indigo-400 rounded-full shadow-[0_0_30px_rgba(59,130,246,0.5)] flex items-center justify-center border-2 border-white/20">
-                   <Mic className="text-white w-6 h-6 animate-pulse" />
-                </div>
+                <button 
+                  onClick={() => {
+                    disconnect();
+                    onEndDemo();
+                  }}
+                  className="relative z-10 w-16 h-16 bg-gradient-to-tr from-blue-600 to-indigo-400 rounded-full shadow-[0_0_30px_rgba(59,130,246,0.5)] flex items-center justify-center border-2 border-white/20 transition-transform hover:scale-105 group cursor-pointer"
+                >
+                   <Mic className="text-white w-6 h-6 group-hover:hidden" />
+                   <X className="text-white w-6 h-6 hidden group-hover:block" />
+                   
+                   <span className="absolute -top-10 bg-black/90 text-xs font-bold tracking-wider text-white px-3 py-1.5 rounded-lg whitespace-nowrap shadow-xl border border-white/20 opacity-0 group-hover:opacity-100 transition-opacity">
+                     End Demo
+                   </span>
+                </button>
              </>
           ) : (
             <button 
               onClick={() => connect()}
-              className="relative z-10 bg-white hover:bg-gray-100 text-black px-6 py-4 rounded-xl flex items-center gap-3 shadow-2xl transition-all group"
+              className="relative z-10 w-16 h-16 bg-gradient-to-tr from-blue-600 to-indigo-400 rounded-full shadow-[0_0_30px_rgba(59,130,246,0.5)] border-2 border-white/20 flex items-center justify-center cursor-pointer hover:scale-110 transition-all group animate-pulse"
             >
-               <Mic className="w-5 h-5" />
-               <span className="font-bold tracking-tight">Connect AI Agent</span>
+               <Mic className="text-white w-6 h-6" />
+               <span className="absolute right-20 bg-blue-600 text-white text-xs font-bold px-4 py-2 rounded-xl whitespace-nowrap shadow-lg flex items-center gap-2">
+                 Tap to Activate AI
+                 <span className="absolute -right-1 top-1/2 -translate-y-1/2 border-[6px] border-transparent border-l-blue-600" />
+               </span>
             </button>
           )}
         </div>
       </div>
-
     </div>
   );
 };
