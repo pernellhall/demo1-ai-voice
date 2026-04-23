@@ -153,22 +153,17 @@ Keep your answers extremely concise, natural, and conversational, suitable for v
       )}
 
       {state.step === 'demo' && (
-        <div className="absolute inset-0 z-10 bg-zinc-900 min-h-[100dvh]">
+        <div className="absolute inset-0 z-10 min-h-[100dvh] bg-white">
            
-           {/* Fallback Dark Gradient so the user never sees a white screen while screenshot loads */}
-           <div className="absolute inset-0 bg-gradient-to-b from-gray-900 to-black z-0" />
-
-           {/* Automated Screenshot API replacing the Iframe */}
-           <img 
-              src={`https://image.thum.io/get/width/1080/crop/1920/maxAge/1/noanimate/${rawUrl}`}
-              alt="Prospect Website Snapshot"
-              className={`absolute inset-0 w-full h-[100dvh] object-cover object-top transition-opacity duration-[1500ms] z-0 ${bgLoaded ? 'opacity-35 mix-blend-screen' : 'opacity-0'}`}
-              onLoad={() => setBgLoaded(true)}
-              onError={(e) => {
-                 // Fail silently if screenshot blocks - the dark gradient remains.
-                 e.currentTarget.style.display = 'none'; 
-              }}
+           <iframe 
+             src={rawUrl}
+             title="Prospect Website"
+             className="absolute inset-0 w-full h-[100dvh] border-0 z-0"
+             sandbox="allow-same-origin allow-scripts allow-popups allow-forms"
            />
+           
+           {/* Dark gradient overlay at the bottom so the voice agent UI is always visible over the site */}
+           <div className="absolute bottom-0 left-0 w-full h-48 bg-gradient-to-t from-black/80 to-transparent z-0 pointer-events-none" />
 
            {/* AI Voice Agent Overlay */}
            <VoiceAgent 
