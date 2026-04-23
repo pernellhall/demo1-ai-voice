@@ -17,11 +17,11 @@ export function useLiveAPI(systemInstruction: string) {
     if (isConnected || sessionRef.current) return;
 
     try {
-      const meta = import.meta as any;
-      const apiKey = meta.env?.VITE_GEMINI_API_KEY || (window as any).process?.env?.GEMINI_API_KEY;
+      // Must use exact literal syntax for Vite string replacement to work during build
+      const apiKey = import.meta.env.VITE_GEMINI_API_KEY || process.env.GEMINI_API_KEY;
       
       if (!apiKey) {
-        alert("Missing VITE_GEMINI_API_KEY. Please add it to your environment.");
+        alert("Missing API Key! Please add VITE_GEMINI_API_KEY or GEMINI_API_KEY to your Render environment variables and redeploy.");
         return;
       }
 
