@@ -16,16 +16,22 @@ export function useLiveAPI(systemInstruction: string) {
 
   // For visualizer
   const [volume, setVolume] = useState(0);
+  const [error, setError] = useState<string | null>(null);
 
   const connect = useCallback(async () => {
     if (isConnected) return;
+    setError(null);
 
     try {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        throw new Error("Your browser does not support microphone access. Please try Chrome or Safari.");
+      }
+
       const meta = import.meta as any;
-      const apiKey = meta.env.VITE_GEMINI_API_KEY || (process as any).env.GEMINI_API_KEY; 
+      const processEnv = typeof process !== 'undefined' ? process.env : {};
+      const apiKey = (meta.env?.VITE_GEMINI_API_KEY || (processEnv as any).GEMINI_API_KEY || (window as any).process?.env?.GEMINI_API_KEY);
       
-      const windowProcess = (window as any).process;
-      const ai = new GoogleGenAI({ apiKey: windowProcess?.env?.GEMINI_API_KEY || meta.env.VITE_GEMINI_API_KEY || (process as any).env.GEMINI_API_KEY });
+      const ai = new GoogleGenAI({ apiKey: apiKey || "MISSING_KEY_FALLBACK" });
       
       const sessionPromise = ai.live.connect({
         model: "gemini-3.1-flash-live-preview",
@@ -39,15 +45,24 @@ export function useLiveAPI(systemInstruction: string) {
         callbacks: {
           onopen: async () => {
             setIsConnected(true);
-            await setupAudioCapture(sessionPromise);
+            try {
+              await setupAudioCapture(sessionPromise);
+            } catch (err: any) {
+              setError("Mic access failed. Check permissions.");
+              console.error(err);
+            }
           },
           onmessage: (message: LiveServerMessage) => {
-            const base64Audio = message.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
-            if (base64Audio) {
-              queueAudioPlayback(base64Audio);
-            }
-            if (message.serverContent?.interrupted) {
-              playQueueRef.current = [];
+            try {
+              const base64Audio = message.serverContent?.modelTurn?.parts?.[0]?.inlineData?.data;
+              if (base64Audio) {
+                queueAudioPlayback(base64Audio);
+              }
+              if (message.serverContent?.interrupted) {
+                playQueueRef.current = [];
+              }
+            } catch (err) {
+              console.error("Error processing message", err);
             }
           },
           onclose: () => {
@@ -56,32 +71,38 @@ export function useLiveAPI(systemInstruction: string) {
           },
           onerror: (error: any) => {
             console.error('GenAI Live API Error:', error);
+            setError("AI Connection Error.");
           }
         }
       });
       sessionRef.current = sessionPromise;
       
-    } catch (e) {
+    } catch (e: any) {
       console.error("Failed to connect to Live API:", e);
+      setError(e?.message || "Unknown Connection Error");
     }
   }, [systemInstruction]);
 
   const disconnect = useCallback(() => {
     if (sessionRef.current) {
-      sessionRef.current.then((session: any) => session.close());
+      sessionRef.current.then((session: any) => session.close()).catch(() => {});
     }
     cleanupAudio();
     setIsConnected(false);
   }, []);
 
   const setupAudioCapture = async (sessionPromise: any) => {
-    if (!audioContextRef.current) {
-      const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
-      audioContextRef.current = new AudioContextClass({ sampleRate: 16000 });
-    }
-    const ctx = audioContextRef.current;
-
     try {
+      if (!audioContextRef.current) {
+        const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
+        audioContextRef.current = new AudioContextClass({ sampleRate: 16000 });
+      }
+      const ctx = audioContextRef.current;
+      
+      if (ctx.state === 'suspended') {
+        await ctx.resume();
+      }
+
       const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
       streamRef.current = stream;
       setIsMicrophoneActive(true);
@@ -92,6 +113,7 @@ export function useLiveAPI(systemInstruction: string) {
       inputProcessorRef.current = processor;
 
       processor.onaudioprocess = (e) => {
+        if (!isConnected) return;
         const inputData = e.inputBuffer.getChannelData(0);
         
         // Calculate volume for visualizer
@@ -100,7 +122,7 @@ export function useLiveAPI(systemInstruction: string) {
           sum += inputData[i] * inputData[i];
         }
         const rms = Math.sqrt(sum / inputData.length);
-        setVolume(rms);
+        setVolume(rms * 2); // Increased multiplier to make visualizer visible on phone
 
         // Convert Float32 to Int16 PCM
         const pcm16 = new Int16Array(inputData.length);
@@ -118,42 +140,46 @@ export function useLiveAPI(systemInstruction: string) {
            session.sendRealtimeInput({
              audio: { data: base64Data, mimeType: 'audio/pcm;rate=16000' }
            });
-        });
+        }).catch(() => {});
       };
 
       source.connect(processor);
       processor.connect(ctx.destination);
-    } catch (e) {
+    } catch (e: any) {
       console.error("Microphone access denied or error:", e);
+      throw e;
     }
   };
 
-  const queueAudioPlayback = (base64Audio: string) => {
-    // Decode base64 to Float32Array PCM
-    const binary = atob(base64Audio);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) {
-      bytes[i] = binary.charCodeAt(i);
-    }
-    const int16Array = new Int16Array(bytes.buffer);
-    const float32Array = new Float32Array(int16Array.length);
-    for (let i = 0; i < int16Array.length; i++) {
-      float32Array[i] = int16Array[i] / 32768.0;
-    }
+  const queueAudioPlayback = async (base64Audio: string) => {
+    try {
+      // Ensure context is running before decoding buffer
+      if (audioContextRef.current && audioContextRef.current.state === 'suspended') {
+        await audioContextRef.current.resume();
+      }
 
-    playQueueRef.current.push(float32Array);
-    if (!isPlayingRef.current) {
-      playNextAudio();
+      const binary = atob(base64Audio);
+      const bytes = new Uint8Array(binary.length);
+      for (let i = 0; i < binary.length; i++) {
+        bytes[i] = binary.charCodeAt(i);
+      }
+      const int16Array = new Int16Array(bytes.buffer);
+      const float32Array = new Float32Array(int16Array.length);
+      for (let i = 0; i < int16Array.length; i++) {
+        float32Array[i] = int16Array[i] / 32768.0;
+      }
+
+      playQueueRef.current.push(float32Array);
+      if (!isPlayingRef.current) {
+        playNextAudio();
+      }
+    } catch (err) {
+      console.error("Audio playback queue error", err);
     }
   };
 
-  const playNextAudio = () => {
+  const playNextAudio = async () => {
     if (!audioContextRef.current) return;
-    
-    // We receive 24kHz audio from Gemini Live
-    if (audioContextRef.current.sampleRate !== 24000) {
-        // Just creating a context specifically for output if needed, but modern browsers usually handle Float32 buffer play via simple buffer creation well.
-    }
     
     if (playQueueRef.current.length === 0) {
       isPlayingRef.current = false;
@@ -165,21 +191,25 @@ export function useLiveAPI(systemInstruction: string) {
     
     const ctx = audioContextRef.current;
     
-    // Create output context if needed to match 24kHz
-    if (!outputProcessorRef.current) {
-         // Create a dedicated playback context if not created yet or use existing
+    try {
+      if (ctx.state === 'suspended') {
+        await ctx.resume();
+      }
+
+      const buffer = ctx.createBuffer(1, audioData.length, 24000);
+      buffer.getChannelData(0).set(audioData);
+
+      const source = ctx.createBufferSource();
+      source.buffer = buffer;
+      source.connect(ctx.destination);
+      source.onended = () => {
+        playNextAudio();
+      };
+      source.start();
+    } catch (err) {
+      console.error("Playback execution error", err);
+      isPlayingRef.current = false;
     }
-
-    const buffer = ctx.createBuffer(1, audioData.length, 24000);
-    buffer.getChannelData(0).set(audioData);
-
-    const source = ctx.createBufferSource();
-    source.buffer = buffer;
-    source.connect(ctx.destination);
-    source.onended = () => {
-      playNextAudio();
-    };
-    source.start();
   };
 
   const cleanupAudio = () => {
@@ -194,5 +224,5 @@ export function useLiveAPI(systemInstruction: string) {
     setIsMicrophoneActive(false);
   };
 
-  return { connect, disconnect, isConnected, volume };
+  return { connect, disconnect, isConnected, volume, error };
 }
