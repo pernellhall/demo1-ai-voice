@@ -15,19 +15,15 @@ interface VoiceAgentProps {
 }
 
 export const VoiceAgent: React.FC<VoiceAgentProps> = ({ systemInstruction, onEndDemo }) => {
-  const { connect, disconnect, isConnected, volume, error: aiError } = useLiveAPI(systemInstruction);
-  const [timeLeft, setTimeLeft] = useState(5 * 60); // 5 minutes demo
+  const { connect, disconnect, isConnected, volume } = useLiveAPI(systemInstruction);
+  const [timeLeft, setTimeLeft] = useState(5 * 60);
 
   useEffect(() => {
-    // DO NOT AUTO-CONNECT! Mobile browsers kill the audio stream if connected programmatically after an async scrape.
-    // The user MUST physically tap the agent to unlock the audio engine.
-    
-    // Connect timeout
     const timer = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
           clearInterval(timer);
-          onEndDemo(); // Demo time expired
+          onEndDemo();
           return 0;
         }
         return prev - 1;
@@ -46,8 +42,7 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({ systemInstruction, onEnd
     return `${m}:${s.toString().padStart(2, '0')}`;
   };
 
-  // Pulse animation based on volume
-  const pulseScale = Math.max(1, 1 + (volume * 10)); // Volume usually 0.0 - 0.2
+  const pulseScale = Math.max(1, 1 + (volume * 10));
 
   return (
     <div className="fixed bottom-6 right-6 z-50 flex items-end gap-4 pointer-events-none">
@@ -76,11 +71,6 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({ systemInstruction, onEnd
 
       {/* The Agent Avatar / Waveform */}
       <div className="relative pointer-events-auto flex flex-col items-center gap-3">
-        {aiError && (
-          <div className="bg-red-500/90 text-white text-[10px] px-3 py-1 rounded-lg mb-2 max-w-[150px] text-center backdrop-blur shadow-lg border border-red-400/50">
-            {aiError}
-          </div>
-        )}
         <div className="relative flex items-center justify-center w-24 h-24">
           {isConnected ? (
              <>
@@ -99,15 +89,13 @@ export const VoiceAgent: React.FC<VoiceAgentProps> = ({ systemInstruction, onEnd
                 </div>
              </>
           ) : (
-            <div 
+            <button 
               onClick={() => connect()}
-              className="relative z-10 w-20 h-20 bg-gradient-to-tr from-green-600 to-emerald-400 rounded-full flex flex-col items-center justify-center shadow-[0_0_40px_rgba(16,185,129,0.6)] border-2 border-white/40 cursor-pointer hover:scale-105 transition-all group animate-bounce"
+              className="relative z-10 bg-white hover:bg-gray-100 text-black px-6 py-4 rounded-xl flex items-center gap-3 shadow-2xl transition-all group"
             >
-               <Mic className="text-white w-8 h-8" />
-               <span className="absolute -top-12 bg-black/90 text-sm font-bold tracking-wider text-white px-4 py-2 rounded-xl whitespace-nowrap shadow-xl border border-white/20">
-                 TAP TO START AI
-               </span>
-            </div>
+               <Mic className="w-5 h-5" />
+               <span className="font-bold tracking-tight">Connect AI Agent</span>
+            </button>
           )}
         </div>
       </div>
