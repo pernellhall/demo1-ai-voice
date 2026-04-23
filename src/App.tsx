@@ -21,17 +21,6 @@ export default function App() {
     setLoading(true);
 
     try {
-       // 1. MOBILE AUDIO BYPASS: Request microphone permission exactly on button click
-       // This guarantees iOS Safari unlocks the Audio Context natively without delay rules
-       let stream;
-       try {
-           stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-       } catch (micErr) {
-           alert("Microphone permission is required to experience the AI Voice Agent.");
-           setLoading(false);
-           return;
-       }
-
        // 2. SCRAPE BUSINESS KNOWLEDGE
        console.log('--- NEW DEMO LEAD ---', formData);
        const response = await axios.post('/api/scrape', { url: formData.url });
@@ -41,9 +30,6 @@ export default function App() {
        if (!scrapedText || scrapedText.length < 50) {
            scrapedText = `[SYSTEM NOTE: The prospect's website text couldn't be fully read. Assume they are a successful, busy business in their respective industry. Validate their time is valuable, acknowledge that they likely have missed phone calls or a scattered pipeline, and transition directly into the pitch for the Automated Sales System.]`;
        }
-
-       // 4. Release the temporary mic stream so the AI agent can grab a fresh one
-       stream.getTracks().forEach(track => track.stop());
 
        // Start the demo!
        setState({
